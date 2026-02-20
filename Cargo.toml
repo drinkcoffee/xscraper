@@ -7,6 +7,12 @@ license = "MIT"
 repository = "https://github.com/yourusername/xscraper"
 readme = "README.md"
 
+[features]
+default = []
+# Use a real headless Chrome/Chromium for JS-heavy or bot-protected sites (e.g. x.com).
+# Requires Chrome or Chromium installed. Build with: cargo build --features browser
+browser = ["chromiumoxide", "futures-util"]
+
 [dependencies]
 tokio = { version = "1", features = ["full"] }
 rmcp = { version = "0.3", features = ["server", "transport-io"] }
@@ -17,3 +23,5 @@ url = "2"
 clap = { version = "4", features = ["derive"] }
 anyhow = "1.0"
 schemars = "1.0"
+chromiumoxide = { version = "0.7", optional = true }
+futures-util = { version = "0.3", optional = true }

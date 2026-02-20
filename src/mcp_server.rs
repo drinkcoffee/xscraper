@@ -20,6 +20,9 @@ pub struct ScraperMcpService {
 pub struct ScrapeUrlRequest {
     #[schemars(description = "The URL of the web page to scrape (e.g. https://example.com)")]
     pub url: String,
+    #[schemars(description = "If true, use headless Chrome/Chromium (for JS-heavy or bot-protected sites like x.com). Requires build with --features browser.")]
+    #[serde(default)]
+    pub use_browser: bool,
 }
 
 #[tool_router]
@@ -30,12 +33,12 @@ impl ScraperMcpService {
         }
     }
 
-    #[tool(description = "Scrape a web page: fetch the URL and return the visible text plus all links. Use this to get the main readable content and link list from any webpage.")]
+    #[tool(description = "Scrape a web page: fetch the URL and return the visible text plus all links. Set use_browser to true for JS-heavy or bot-protected sites (e.g. x.com).")]
     async fn scrape_url_tool(
         &self,
         Parameters(request): Parameters<ScrapeUrlRequest>,
     ) -> Result<CallToolResult, McpError> {
-        let page = scrape_url(&request.url).await.map_err(|e| McpError {
+        let page = scrape_url_impl(&request.url, request.use_browser).await.map_err(|e| McpError {
             code: ErrorCode(-32603),
             message: Cow::from(format!("Scrape failed: {}", e)),
             data: None,
@@ -43,6 +46,16 @@ impl ScraperMcpService {
         let text = format_for_display(&page);
         Ok(CallToolResult::success(vec![Content::text(text)]))
     }
+}
+
+async fn scrape_url_impl(url: &str, use_browser: bool) -> Result<crate::scraper::ScrapedPage, anyhow::Error> {
+    if use_browser {
+        #[cfg(feature = "browser")]
+        return crate::browser::scrape_url_with_browser(url).await;
+        #[cfg(not(feature = "browser"))]
+        anyhow::bail!("use_browser is true but this build does not have the 'browser' feature")
+    }
+    scrape_url(url).await
 }
 
 #[tool_handler]

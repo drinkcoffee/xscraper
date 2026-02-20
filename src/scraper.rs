@@ -1,6 +1,7 @@
 //! Core web scraping: fetch a URL, extract visible text and links.
 
 use anyhow::{Context, Result};
+use reqwest::header::{HeaderMap, HeaderValue, ACCEPT, ACCEPT_LANGUAGE, USER_AGENT};
 use scraper::{ElementRef, Html, Node};
 use std::collections::HashSet;
 use url::Url;
@@ -16,13 +17,45 @@ pub struct ScrapedPage {
     pub links: Vec<String>,
 }
 
+/// Headers that mimic Google Chrome so sites (e.g. x.com) don't reject the request.
+fn chrome_headers() -> HeaderMap {
+    let mut h = HeaderMap::new();
+    h.insert(
+        USER_AGENT,
+        HeaderValue::from_static(
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+        ),
+    );
+    h.insert(
+        ACCEPT,
+        HeaderValue::from_static(
+            "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
+        ),
+    );
+    h.insert(
+        ACCEPT_LANGUAGE,
+        HeaderValue::from_static("en-US,en;q=0.9"),
+    );
+    // Sec-* headers Chrome sends (x.com and others may check these)
+    h.insert(
+        "Sec-Ch-Ua",
+        HeaderValue::from_static(r#""Google Chrome";v="131", "Chromium";v="131", "Not_A Brand";v="24""#),
+    );
+    h.insert("Sec-Ch-Ua-Mobile", HeaderValue::from_static("?0"));
+    h.insert("Sec-Ch-Ua-Platform", HeaderValue::from_static(r#""macOS""#));
+    h.insert("Sec-Fetch-Dest", HeaderValue::from_static("document"));
+    h.insert("Sec-Fetch-Mode", HeaderValue::from_static("navigate"));
+    h.insert("Sec-Fetch-Site", HeaderValue::from_static("none"));
+    h.insert("Sec-Fetch-User", HeaderValue::from_static("?1"));
+    h.insert("Upgrade-Insecure-Requests", HeaderValue::from_static("1"));
+    h
+}
+
 /// Fetches `url`, parses the HTML, and returns visible text plus links.
 pub async fn scrape_url(url: &str) -> Result<ScrapedPage> {
     let url = Url::parse(url).context("invalid URL")?;
     let client = reqwest::Client::builder()
-        .user_agent(
-            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        )
+        .default_headers(chrome_headers())
         .build()?;
     let res = client
         .get(url.as_str())

@@ -5,6 +5,9 @@
 mod mcp_server;
 mod scraper;
 
+#[cfg(feature = "browser")]
+mod browser;
+
 use anyhow::Result;
 use clap::{Parser, Subcommand};
 use rmcp::transport::stdio;
@@ -26,6 +29,9 @@ enum Commands {
     Scrape {
         /// URL to scrape (e.g. https://example.com)
         url: String,
+        /// Use headless Chrome/Chromium (for JS-heavy or bot-protected sites like x.com). Requires browser feature and Chrome installed.
+        #[arg(long)]
+        browser: bool,
     },
     /// Run the MCP server on stdio (for Cursor, Claude, etc.).
     Serve,
@@ -35,8 +41,19 @@ enum Commands {
 async fn main() -> Result<()> {
     let cli = Cli::parse();
     match cli.command {
-        Commands::Scrape { url } => {
-            let page = scrape_url(&url).await?;
+        Commands::Scrape { url, browser: use_browser } => {
+            let page = if use_browser {
+                #[cfg(feature = "browser")]
+                {
+                    crate::browser::scrape_url_with_browser(&url).await?
+                }
+                #[cfg(not(feature = "browser"))]
+                {
+                    anyhow::bail!("--browser requires building with the 'browser' feature: cargo build --features browser")
+                }
+            } else {
+                scrape_url(&url).await?
+            };
             println!("{}", format_for_display(&page));
         }
         Commands::Serve => {
